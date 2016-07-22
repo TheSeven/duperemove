@@ -719,6 +719,8 @@ int main(int argc, char **argv)
 	init_results_tree(&res);
 	init_hash_tree(&dups_tree);
 
+	if (!geteuid())
+		target_rw = 0;
 	ret = parse_options(argc, argv, &filelist_idx);
 	if (ret || version_only) {
 		usage(argv[0]);
