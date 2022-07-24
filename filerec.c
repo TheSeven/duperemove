@@ -561,6 +561,13 @@ int fiemap_iter_next_extent(struct fiemap_ctxt *ctxt, struct filerec *file,
 		ret = do_fiemap(fiemap, file, fiestart);
 		if (ret)
 			return ret;
+		if (!fiemap->fm_mapped_extents) {
+			*len = 0;
+			*poff = 0;
+			*loff = fiestart;
+			*flags = FIEMAP_EXTENT_LAST;
+			return 0;
+		}
 		idx = ctxt->idx = 0;
 	}
 
