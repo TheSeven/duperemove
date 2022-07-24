@@ -146,14 +146,6 @@ static void wait_update_extent_search_status(GThreadPool *pool)
 	clear_extent_search_status(search_processed, 0);
 }
 
-static inline unsigned long long block_len(struct file_block *block,
-					   struct file_extent *extent)
-{
-	if (block->b_flags & FILE_BLOCK_PARTIAL)
-		return extent->len % blocksize;
-	return blocksize;
-}
-
 static void record_match(struct results_tree *res, unsigned char *digest,
 			 struct filerec *orig, struct file_extent *orig_extent,
 			 struct filerec *walk, struct file_extent *walk_extent,
@@ -173,13 +165,8 @@ static void record_match(struct results_tree *res, unsigned char *digest,
 	soff[0] = start[0]->b_loff;
 	soff[1] = start[1]->b_loff;
 
-	if (v2_hashfile) {
-		eoff[0] = block_len_using_isize(end[0]) + end[0]->b_loff - 1;
-		eoff[1] = block_len_using_isize(end[1]) + end[1]->b_loff - 1;
-	} else {
-		eoff[0] = block_len(end[0], orig_extent) + end[0]->b_loff - 1;
-		eoff[1] = block_len(end[1], walk_extent) + end[1]->b_loff - 1;
-	}
+	eoff[0] = block_len(end[0]) + end[0]->b_loff - 1;
+	eoff[1] = block_len(end[1]) + end[1]->b_loff - 1;
 
 	len = eoff[0] - soff[0] + 1;
 
@@ -191,15 +178,15 @@ static void record_match(struct results_tree *res, unsigned char *digest,
 		exit(ENOMEM);
 	}
 
-	dprintf("Duplicated extent of %llu blocks in files:\n%s\t\t%s\n",
-		(unsigned long long)len / blocksize, orig->filename,
+	dprintf("Duplicated extent of %llu bytes in files:\n%s\t\t%s\n",
+		(unsigned long long)len, orig->filename,
 		walk->filename);
 
 	dprintf("%llu-%llu\t\t%llu-%llu\n",
-		(unsigned long long)soff[0] / blocksize,
-		(unsigned long long)eoff[0] / blocksize,
-		(unsigned long long)soff[1] / blocksize,
-		(unsigned long long)eoff[1] / blocksize);
+		(unsigned long long)soff[0],
+		(unsigned long long)eoff[0],
+		(unsigned long long)soff[1],
+		(unsigned long long)eoff[1]);
 }
 
 static inline void mark_block_seen(uint64_t *off, struct file_block *block)
@@ -234,7 +221,7 @@ static int walk_dupe_block(struct filerec *orig_file,
 	struct file_block *end[2] = { NULL, NULL };
 	struct running_checksum *csum;
 	unsigned char match_id[DIGEST_LEN_MAX] = {0, };
-	uint64_t orig_blkno, walk_blkno;
+	uint64_t orig_end, walk_end;
 	struct rb_node *node;
 
 	if (block_seen(*walk_best_off, block) ||
@@ -262,8 +249,8 @@ static int walk_dupe_block(struct filerec *orig_file,
 		    rb_next(&block->b_file_next) == NULL)
 			break;
 
-		orig_blkno = orig->b_loff;
-		walk_blkno = block->b_loff;
+		orig_end = orig->b_loff + block_len(orig);
+		walk_end = block->b_loff + block_len(block);
 
 		node = rb_next(&orig->b_file_next);
 		orig = rb_entry(node, struct file_block, b_file_next);
@@ -275,8 +262,8 @@ static int walk_dupe_block(struct filerec *orig_file,
 		 * old ones. If they aren't, then this has to be the
 		 * end of our extents.
 		 */
-		if (orig->b_loff != (orig_blkno + blocksize) ||
-		    block->b_loff != (walk_blkno + blocksize))
+		if (orig->b_loff != orig_end ||
+		    block->b_loff != walk_end)
 			break;
 	}
 
@@ -567,7 +554,7 @@ static int compare_extents(struct filerec *orig_file,
 	uint64_t extent_end;
 	struct running_checksum *csum;
 	unsigned char match_id[DIGEST_LEN_MAX] = {0, };
-	uint64_t orig_blkno, walk_blkno, match_end;
+	uint64_t orig_end, walk_end, match_end;
 	bool matchmore = true;
 
 	extent_end = block->b_loff + search_len - 1;
@@ -609,8 +596,8 @@ next_match:
 			break;
 		}
 
-		orig_blkno = orig->b_loff;
-		walk_blkno = block->b_loff;
+		orig_end = orig->b_loff + block_len(orig);
+		walk_end = block->b_loff + block_len(block);
 
 		orig = get_next_block(orig);
 		block = get_next_block(block);
@@ -620,8 +607,8 @@ next_match:
 		 * old ones. If they aren't, then this has to be the
 		 * end of our extent.
 		 */
-		if (orig->b_loff != (orig_blkno + blocksize) ||
-		    block->b_loff != (walk_blkno + blocksize)) {
+		if (orig->b_loff != orig_end ||
+		    block->b_loff != walk_end) {
 			matchmore = false;
 			break;
 		}
@@ -646,7 +633,7 @@ next_match:
 	 * - don't limit search or matches at all (what we have in
          *   walk_dupe_block())
 	 */
-	match_end = block_len(end[1], walk_file_extent) + end[1]->b_loff - 1;
+	match_end = block_len(end[1]) + end[1]->b_loff - 1;
 	if (match_end <= extent_end)
 		record_match(res, match_id, orig_file, orig_file_extent,
 			     walk_file, walk_file_extent, start, end);

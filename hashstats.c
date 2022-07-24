@@ -111,8 +111,6 @@ static void printf_file_block_flags(unsigned int flags)
 		printf("deduped ");
 	if (flags & FILE_BLOCK_HOLE)
 		printf("hole ");
-	if (flags & FILE_BLOCK_PARTIAL)
-		printf("partial ");
 	printf(")");
 }
 
@@ -136,11 +134,11 @@ static int print_all_blocks(unsigned char *digest)
 		loff = sqlite3_column_int64(find_blocks_stmt, 1);
 		flags = sqlite3_column_int(find_blocks_stmt, 2);
 
-		printf("  %s\tloff: %llu lblock: %llu "
+		printf("  %s\tloff: %llu size: %u "
 		       "flags: 0x%x ", filename,
 		       (unsigned long long)loff,
-		       (unsigned long long)loff / blocksize,
-		       flags);
+		       (flags >> 12) ? (flags >> 12) : blocksize,
+		       flags & 0xfff);
 		printf_file_block_flags(flags);
 		printf("\n");
 	}

@@ -95,11 +95,11 @@ void debug_print_block(struct file_block *e)
 {
 	struct filerec *f = e->b_file;
 
-	printf("%s\tloff: %llu lblock: %llu flags: 0x%x\n",
+	printf("%s\tloff: %llu size: %u flags: 0x%x\n",
 	       f->filename,
 	       (unsigned long long)e->b_loff,
-	       (unsigned long long)e->b_loff / blocksize,
-	       e->b_flags);
+	       (e->b_flags >> 12) ? (e->b_flags >> 12) : blocksize,
+	       e->b_flags & 0xfff);
 }
 
 struct file_hash_head *find_file_hash_head(struct dupe_blocks_list *dups,

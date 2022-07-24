@@ -606,13 +606,10 @@ static inline int is_block_zeroed(void *buf, ssize_t buf_size)
 
 static int xlate_extent_flags(int fieflags, ssize_t len)
 {
-	int flags = 0;
+	int flags = len << 12;
 
 	if (fieflags & FIEMAP_SKIP_FLAGS)
 		flags |= FILE_BLOCK_SKIP_COMPARE;
-
-	if (len < blocksize)
-		flags |= FILE_BLOCK_PARTIAL;
 
 	return flags;
 }
@@ -668,7 +665,7 @@ static int csum_blocks(struct csum_ctxt *data, struct running_checksum *csum,
 					     &data->nr_block_hashes,
 					     extoff + start,
 					     data->block_digest,
-					     flags);
+					     xlate_extent_flags(flags, cmp_len));
 			if (ret)
 				break;
 
@@ -701,7 +698,6 @@ static int csum_extent(struct csum_ctxt *data, uint64_t extent_off,
 		       uint64_t *ret_total_bytes_read)
 {
 	int ret = 0;
-	int flags;
 	uint64_t total_bytes_read = 0;
 	struct running_checksum *csum;
 
@@ -727,9 +723,8 @@ static int csum_extent(struct csum_ctxt *data, uint64_t extent_off,
 
 		bytes_read = ret;
 		total_bytes_read += bytes_read;
-		flags = xlate_extent_flags(extent_flags, bytes_read);
 
-		ret = csum_blocks(data, csum, extent_off, bytes_read, flags);
+		ret = csum_blocks(data, csum, extent_off, bytes_read, extent_flags);
 		if (ret)
 			break;
 

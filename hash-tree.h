@@ -45,7 +45,6 @@ struct dupe_blocks_list {
 #define FILE_BLOCK_SKIP_COMPARE	0x0001
 #define FILE_BLOCK_DEDUPED	0x0002
 #define FILE_BLOCK_HOLE		0x0004
-#define	FILE_BLOCK_PARTIAL	0x0008
 
 struct file_block {
 	struct dupe_blocks_list	*b_parent;
@@ -66,21 +65,10 @@ struct file_block {
 struct dupe_blocks_list *find_block_list(struct hash_tree *tree,
 					 unsigned char *digest);
 
-static inline unsigned long block_len_using_isize(struct file_block *block)
+static inline unsigned long block_len(struct file_block *block)
 {
-	/*
-	 * Avoid storing the length of each block and instead use a
-	 * flag for partial blocks.
-	 *
-	 * NOTE: This only works if we assume that partial blocks are
-	 * at the end of a file
-	 */
-	if (block->b_flags & FILE_BLOCK_PARTIAL) {
-		int ret = block->b_file->size % blocksize;
-		abort_on(ret == 0);
-		return ret;
-	}
-	return blocksize;
+	unsigned long size = block->b_flags >> 12;
+	return size ? size : blocksize;
 }
 
 int insert_hashed_block(struct hash_tree *tree, unsigned char *digest,
